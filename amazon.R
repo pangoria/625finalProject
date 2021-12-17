@@ -5,7 +5,6 @@ library(textdata)
 library(stringr)
 
 #loading in data
-setwd("~/Downloads/")
 d <- stream_in(file("~/Downloads/AMAZON_FASHION_5.json"))
 
 ##DATA CLEANING
@@ -42,6 +41,10 @@ d <- d %>%
     group_by(ID) %>%
     summarise(score = sum(value), mean_score = mean(value), count_words=n())) %>%
     replace_na(list(score = 0, mean_score=0, count_words=0))
+
+d <- as.data.frame(d)
+
+write_json(d, "/Users/jennabedrava/Desktop/sentiment_data.json")
 
 #VISUALIZATIONS
 
