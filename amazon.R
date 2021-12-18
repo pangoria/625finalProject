@@ -3,13 +3,16 @@ library(tidyverse)
 library(tidytext)
 library(textdata)
 library(stringr)
+library(bench)
 library(wordcloud)
 library(colorspace)
 library(scales)
 library(VGAM)
 library(pacman)
+library(gt)
 library(aod)
 library(stargazer)
+library(gtsummary)
 library(rpart)
 library(rpart.plot)
 library(yardstick)
@@ -19,8 +22,8 @@ library(caret)
 library(cvms)
 
 #loading in data
-setwd("/home/bedrava/biostat625/625finalProject/")
-d <- stream_in(file("AMAZON_FASHION.json"))
+#setwd("/home/bedrava/biostat625/625finalProject/")
+d <- stream_in(file("AMAZON_FASHION (1).json"))
 
 ##DATA CLEANING
 
@@ -61,6 +64,9 @@ d <- d %>%
   replace_na(list(score = 0, mean_score=0, count_words=0))
 
 #VISUALIZATIONS
+
+#table of proportions by overall cateogry
+prop.table(table(d$overall))
 
 #making word summary dataframe
 word_summary <- words %>% group_by(word) %>%
@@ -103,8 +109,22 @@ ggplot(data = d) + geom_bar(aes(x=overall, fill = as.factor(overall), color = as
   scale_fill_manual(values = c("#7fcdbb", "#253494", "#fff7f3", "#df65b0", "#980043")) +
   scale_color_manual(values = c("#7fcdbb", "#253494", "#fff7f3", "#df65b0", "#980043")) +
   labs(x = "Number of Stars", y = "Count", title = "Distribution of Customer Star Rating") +
-  theme_minimal() + theme(legend.position = "none", axis.text=element_text(size=12), axis.title=element_text(size=14),
-                          plot.title = element_text(size=14, face="bold", hjust=.5))
+  theme_minimal() +
+  theme(legend.position = "none", axis.text=element_text(size=12), axis.title=element_text(size=14),
+        plot.title = element_text(size=14, face="bold", hjust=.5))+
+  annotate(geom="text", x=1, y=15000, label="0.12",
+           color="black")+
+  annotate(geom="text", x=2, y=15000, label="0.07",
+           color="black")+
+  annotate(geom="text", x=3, y=15000, label="0.11",
+           color="black")+
+  annotate(geom="text", x=4, y=15000, label="0.17",
+           color="black")+
+  annotate(geom="text", x=5, y=15000, label="0.52",color="black")
+
+
+#propsPerRating <- round(as.numeric(prop.table(table(d$overall))),2)
+
 
 #making boxplot of sentiment scores by overall rating
 ggplot(data=d, aes(x=as.factor(overall), y=mean_score, fill = as.factor(overall))) + geom_boxplot() +
@@ -138,11 +158,17 @@ test <- d[-train_ind, ]
 #full model
 pred_star <- vglm(overall ~ score + count_words, data=train,
                   family = multinomial(refLevel = 3))
-summary(pred_star)
+#summary(pred_star)
+system.time(vglm(overall ~ score + count_words, data=train,
+                 family = multinomial(refLevel = 3))) #31.636 seconds
 
 #creating pretty output of full model
 fullmod_summary <- summaryvglm(pred_star)
-stargazer(fullmod_summary@coef3, type="html", out = "fullmodel.html")
+k <- as.data.frame(round(coef(fullmod_summary),3))
+k <- k %>% mutate(OR = round(exp(Estimate),2))
+k <- k[,c(1,5,2,3,4)]
+multi_tbl <- gt(k, rownames_to_stub = T)
+gtsave(multi_tbl, "./multitbl.png")
 
 #finding predicted values of test data
 test <- mutate(test, predicted_multi = apply((predict(pred_star, type = "res", newdata = test)), 1, which.max))
@@ -172,6 +198,11 @@ table(test$predicted_star) #decision tree not accurate
 naivebayes <- multinomial_naive_bayes(x = model.matrix(~score + count_words, data = train),
                                       y = train$overall)
 summary(naivebayes)
+
+#test relative efficiency of naive bayes method vs multinomial
+system.time(multinomial_naive_bayes(x = model.matrix(~score + count_words, data = train),
+                                    y = train$overall))
+#0.058 seconds (much faster than vglm)
 
 #predicting training set values with naivebayes
 test <- mutate(test,
@@ -226,6 +257,8 @@ ggplot(plt2, aes(Reference, Prediction, fill= Freq/Total_Values)) +
   theme(axis.text=element_text(size=10), axis.title=element_text(size=12),
         plot.title = element_text(size=14, hjust=.5),
         axis.line = element_line(colour = "white"))
+
+
 
 
 
